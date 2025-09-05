@@ -206,8 +206,20 @@ class HotkeyManager {
     
     // Handle special cases
     if (key === ' ') key = 'Space';
+    
+    // For single character keys, use the event.key as-is when shift is pressed
+    // This preserves the correct case (e.g., 'D' for Shift+D)
     if (key.length === 1) {
-      key = key.toLowerCase();
+      if (event.shiftKey && key.match(/[A-Z]/)) {
+        // Keep uppercase when shift produces an uppercase letter
+        // (this is the expected case)
+      } else if (!event.shiftKey && key.match(/[a-z]/)) {
+        // Keep lowercase when no shift produces a lowercase letter
+        // (this is the expected case)
+      } else {
+        // For other cases, normalize to lowercase
+        key = key.toLowerCase();
+      }
     }
     
     parts.push(key);

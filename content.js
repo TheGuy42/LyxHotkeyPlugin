@@ -41,9 +41,15 @@
     constructor() {
       this.isActive = false;
       this.loadedBindings = null;
+      this.isInitialized = false;
       
-      // Load settings and start
-      this.initialize();
+      // Start initialization (async)
+      this.initialize().then(() => {
+        this.isInitialized = true;
+        logger.info('LyX Hotkey Plugin initialization completed');
+      }).catch((error) => {
+        logger.error('Failed to initialize LyX Hotkey Plugin:', error);
+      });
     }
     
     async initialize() {
@@ -96,8 +102,6 @@
         chrome.storage.onChanged.addListener((changes, namespace) => {
           this.handleStorageChange(changes, namespace);
         });
-        
-        logger.info('LyX Hotkey Plugin fully initialized');
         
       } catch (error) {
         logger.error('Failed to initialize plugin:', error);
@@ -218,6 +222,18 @@
             
           case 'getStatus':
             try {
+              if (!this.isInitialized) {
+                sendResponse({
+                  success: true,
+                  active: false,
+                  bindings: { totalBindings: 0, enabled: false },
+                  conflicts: [],
+                  currentSequence: [],
+                  initializing: true
+                });
+                break;
+              }
+              
               const stats = hotkeyManager.getStatistics();
               const conflicts = Array.from(hotkeyManager.getConflicts());
               const currentSequence = hotkeyManager.getCurrentSequence();
