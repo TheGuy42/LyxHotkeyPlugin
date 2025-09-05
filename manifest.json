@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "LyX Hotkey Plugin",
+  "version": "1.0.0",
+  "description": "Replicates LyX hotkey behavior in the browser for LaTeX input and mathematical notation",
+  
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  
+  "background": {
+    "service_worker": "background.js"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/logger.js", "src/parser.js", "src/hotkeyManager.js", "src/inserter.js", "content.js"],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LyX Hotkey Plugin"
+  },
+  
+  "options_page": "options.html",
+  
+  "icons": {
+    "16": "icons/icon16.svg",
+    "48": "icons/icon48.svg",
+    "128": "icons/icon128.svg"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["src/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
