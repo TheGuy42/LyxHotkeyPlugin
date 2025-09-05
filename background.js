@@ -222,16 +222,61 @@ class BackgroundController {
   
   forwardToContentScript(message, sendResponse) {
     if (!this.activeTabId) {
+      console.warn('No active tab available for forwarding message');
       sendResponse({ success: false, error: 'No active tab' });
       return;
     }
     
+    console.log('Forwarding message to content script on tab:', this.activeTabId, 'message:', message);
+    
     chrome.tabs.sendMessage(this.activeTabId, message)
-      .then(response => sendResponse(response))
+      .then(response => {
+        console.log('Content script response:', response);
+        sendResponse(response || { success: false, error: 'No response from content script' });
+      })
       .catch(error => {
         console.error('Failed to forward message to content script:', error);
-        sendResponse({ success: false, error: error.message });
+        // Try to find any active tab with the content script
+        this.findActiveContentScript()
+          .then(tabId => {
+            if (tabId && tabId !== this.activeTabId) {
+              console.log('Retrying with different tab:', tabId);
+              this.activeTabId = tabId;
+              return chrome.tabs.sendMessage(tabId, message);
+            }
+            throw error;
+          })
+          .then(response => {
+            console.log('Retry content script response:', response);
+            sendResponse(response || { success: false, error: 'No response from content script' });
+          })
+          .catch(retryError => {
+            console.error('Retry also failed:', retryError);
+            sendResponse({ success: false, error: error.message });
+          });
       });
+  }
+  
+  async findActiveContentScript() {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs.length > 0) {
+        return tabs[0].id;
+      }
+      
+      // Fallback: try all tabs
+      const allTabs = await chrome.tabs.query({});
+      for (const tab of allTabs) {
+        if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+          return tab.id;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error finding active content script:', error);
+      return null;
+    }
   }
   
   broadcastToContentScripts(message) {

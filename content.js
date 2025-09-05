@@ -7,23 +7,37 @@
 (function() {
   'use strict';
   
-  // Wait for all modules to be loaded
-  if (typeof window.LyXLogger === 'undefined' || 
-      typeof window.LyXParser === 'undefined' ||
-      typeof window.LyXHotkeyManager === 'undefined' ||
-      typeof window.LyXInserter === 'undefined') {
-    setTimeout(arguments.callee, 50);
-    return;
-  }
+  let initAttempts = 0;
+  const maxAttempts = 100; // 5 seconds max wait time
   
-  const logger = window.LyXLogger.logger;
-  const parser = new window.LyXParser();
-  const hotkeyManager = new window.LyXHotkeyManager();
-  const inserter = window.LyXInserter;
-  
-  logger.info('LyX Hotkey Plugin content script initialized');
-  
-  class LyXHotkeyPlugin {
+  function initializePlugin() {
+    initAttempts++;
+    
+    // Wait for all modules to be loaded
+    if (typeof window.LyXLogger === 'undefined' || 
+        typeof window.LyXParser === 'undefined' ||
+        typeof window.LyXHotkeyManager === 'undefined' ||
+        typeof window.LyXInserter === 'undefined') {
+      
+      if (initAttempts >= maxAttempts) {
+        console.error('LyX Hotkey Plugin: Failed to load required modules after maximum attempts');
+        return;
+      }
+      
+      setTimeout(initializePlugin, 50);
+      return;
+    }
+    
+    console.log('LyX Hotkey Plugin: All modules loaded, initializing...');
+    
+    const logger = window.LyXLogger.logger;
+    const parser = new window.LyXParser();
+    const hotkeyManager = new window.LyXHotkeyManager();
+    const inserter = window.LyXInserter;
+    
+    logger.info('LyX Hotkey Plugin content script initialized');
+    
+    class LyXHotkeyPlugin {
     constructor() {
       this.isActive = false;
       this.loadedBindings = null;
@@ -85,22 +99,36 @@
      */
     loadBindings(bindingsData) {
       try {
+        logger.debug('Loading bindings with data type:', typeof bindingsData, 'data:', bindingsData);
+        
         if (typeof bindingsData === 'string') {
           // Parse LyX bind file content
+          logger.debug('Parsing LyX bind file content, length:', bindingsData.length);
           const bindings = parser.parse(bindingsData);
+          logger.debug('Parser returned bindings map with size:', bindings.size);
           hotkeyManager.loadBindings(bindings);
           this.loadedBindings = bindingsData;
-          logger.info('Loaded bindings from LyX file content');
-        } else if (typeof bindingsData === 'object') {
+          logger.info(`Loaded ${bindings.size} bindings from LyX file content`);
+        } else if (typeof bindingsData === 'object' && bindingsData !== null) {
           // Import previously parsed bindings
+          logger.debug('Importing previously parsed bindings, keys:', Object.keys(bindingsData));
           parser.importBindings(bindingsData);
-          hotkeyManager.loadBindings(parser.getBindings());
+          const bindings = parser.getBindings();
+          logger.debug('Imported bindings map with size:', bindings.size);
+          hotkeyManager.loadBindings(bindings);
           this.loadedBindings = bindingsData;
-          logger.info('Loaded bindings from parsed data');
+          logger.info(`Loaded ${bindings.size} bindings from parsed data`);
+        } else {
+          logger.warn('Invalid bindings data format:', typeof bindingsData, bindingsData);
+          return;
         }
         
         // Save to storage
         chrome.storage.sync.set({ loadedBindings: this.loadedBindings });
+        
+        // Log final statistics
+        const stats = hotkeyManager.getStatistics();
+        logger.info('Final hotkey manager stats:', stats);
         
       } catch (error) {
         logger.error('Failed to load bindings:', error);
@@ -155,64 +183,89 @@
     handleMessage(message, sender, sendResponse) {
       logger.debug('Received message:', message);
       
-      switch (message.action) {
-        case 'toggle':
-          this.toggle();
-          sendResponse({ success: true, active: this.isActive });
-          break;
-          
-        case 'activate':
-          this.activate();
-          sendResponse({ success: true, active: this.isActive });
-          break;
-          
-        case 'deactivate':
-          this.deactivate();
-          sendResponse({ success: true, active: this.isActive });
-          break;
-          
-        case 'loadBindings':
-          this.loadBindings(message.data);
-          sendResponse({ success: true });
-          break;
-          
-        case 'getStatus':
-          sendResponse({
-            active: this.isActive,
-            bindings: hotkeyManager.getStatistics(),
-            conflicts: Array.from(hotkeyManager.getConflicts()),
-            currentSequence: hotkeyManager.getCurrentSequence()
-          });
-          break;
-          
-        case 'setSequenceTimeout':
-          hotkeyManager.setSequenceTimeout(message.timeout);
-          sendResponse({ success: true });
-          break;
-          
-        case 'setDebugMode':
-          logger.setDebugMode(message.enabled);
-          sendResponse({ success: true });
-          break;
-          
-        case 'exportLogs':
-          sendResponse({ logs: logger.exportLogs() });
-          break;
-          
-        case 'clearLogs':
-          logger.clearHistory();
-          sendResponse({ success: true });
-          break;
-          
-        case 'testInsertion':
-          const success = inserter.insertText(message.text, document.activeElement);
-          sendResponse({ success });
-          break;
-          
-        default:
-          logger.warn('Unknown message action:', message.action);
-          sendResponse({ success: false, error: 'Unknown action' });
+      try {
+        switch (message.action) {
+          case 'toggle':
+            this.toggle();
+            sendResponse({ success: true, active: this.isActive });
+            break;
+            
+          case 'activate':
+            this.activate();
+            sendResponse({ success: true, active: this.isActive });
+            break;
+            
+          case 'deactivate':
+            this.deactivate();
+            sendResponse({ success: true, active: this.isActive });
+            break;
+            
+          case 'loadBindings':
+            this.loadBindings(message.data);
+            sendResponse({ success: true });
+            break;
+            
+          case 'getStatus':
+            try {
+              const stats = hotkeyManager.getStatistics();
+              const conflicts = Array.from(hotkeyManager.getConflicts());
+              const currentSequence = hotkeyManager.getCurrentSequence();
+              
+              sendResponse({
+                success: true,
+                active: this.isActive,
+                bindings: stats,
+                conflicts: conflicts,
+                currentSequence: currentSequence
+              });
+            } catch (error) {
+              logger.error('Error getting status:', error);
+              sendResponse({
+                success: false,
+                error: error.message,
+                active: this.isActive,
+                bindings: { totalBindings: 0 },
+                conflicts: [],
+                currentSequence: []
+              });
+            }
+            break;
+            
+          case 'setSequenceTimeout':
+            hotkeyManager.setSequenceTimeout(message.timeout);
+            sendResponse({ success: true });
+            break;
+            
+          case 'setDebugMode':
+            logger.setDebugMode(message.enabled);
+            sendResponse({ success: true });
+            break;
+            
+          case 'exportLogs':
+            sendResponse({ success: true, logs: logger.exportLogs() });
+            break;
+            
+          case 'clearLogs':
+            logger.clearHistory();
+            sendResponse({ success: true });
+            break;
+            
+          case 'testInsertion':
+            const success = inserter.insertText(message.text, document.activeElement);
+            sendResponse({ success });
+            break;
+            
+          default:
+            logger.warn('Unknown message action:', message.action);
+            sendResponse({ success: false, error: 'Unknown action' });
+        }
+      } catch (error) {
+        logger.error('Error handling message:', error);
+        sendResponse({ success: false, error: error.message });
       }
+      
+      // Return true to indicate we'll send response asynchronously if needed
+      return true;
     }
     
     /**
@@ -302,14 +355,18 @@
         currentSequence: hotkeyManager.getCurrentSequence()
       };
     }
+    }
+    
+    // Create global plugin instance
+    window.lyxHotkeyPlugin = new LyXHotkeyPlugin();
+    
+    // Notify background script that content script is ready
+    chrome.runtime.sendMessage({ action: 'contentScriptReady' }).catch((error) => {
+      console.warn('LyX Hotkey Plugin: Could not notify background script (this is normal during extension startup):', error.message);
+    });
   }
   
-  // Create global plugin instance
-  window.lyxHotkeyPlugin = new LyXHotkeyPlugin();
-  
-  // Notify background script that content script is ready
-  chrome.runtime.sendMessage({ action: 'contentScriptReady' }).catch(() => {
-    // Ignore errors - background script might not be ready yet
-  });
+  // Start initialization
+  initializePlugin();
   
 })();
