@@ -86,7 +86,7 @@ class BackgroundController {
       chrome.storage.sync.set({
         hotkeyEnabled: true,
         sequenceTimeout: 1500,
-        debugMode: false
+        debugMode: true  // Enable debug mode by default for troubleshooting
       });
       
       // Open options page on first install

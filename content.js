@@ -49,6 +49,7 @@
     async initialize() {
       try {
         // Load settings from storage
+        logger.debug('Loading settings from storage...');
         const settings = await chrome.storage.sync.get([
           'hotkeyEnabled',
           'loadedBindings',
@@ -56,24 +57,34 @@
           'sequenceTimeout'
         ]);
         
+        logger.debug('Loaded settings:', settings);
+        
         // Configure logger
         if (settings.debugMode) {
           logger.setDebugMode(true);
+          logger.debug('Debug mode enabled');
         }
         
         // Configure hotkey manager
         if (settings.sequenceTimeout) {
+          logger.debug('Setting sequence timeout:', settings.sequenceTimeout);
           hotkeyManager.setSequenceTimeout(settings.sequenceTimeout);
         }
         
         // Load bindings if available
         if (settings.loadedBindings) {
+          logger.debug('Found loaded bindings in storage, loading...');
           this.loadBindings(settings.loadedBindings);
+        } else {
+          logger.debug('No loaded bindings found in storage');
         }
         
         // Enable if configured
         if (settings.hotkeyEnabled !== false) {
+          logger.debug('Activating plugin...');
           this.activate();
+        } else {
+          logger.debug('Plugin disabled in settings');
         }
         
         // Listen for messages from background script
