@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     sequenceText: document.getElementById('sequenceText'),
     toggleBtn: document.getElementById('toggleBtn'),
     optionsBtn: document.getElementById('optionsBtn'),
-    testBtn: document.getElementById('testBtn'),
     bindingCount: document.getElementById('bindingCount'),
     conflictCount: document.getElementById('conflictCount'),
     timeoutValue: document.getElementById('timeoutValue')
@@ -34,10 +33,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     elements.optionsBtn.addEventListener('click', () => {
       chrome.runtime.openOptionsPage();
       window.close();
-    });
-    
-    elements.testBtn.addEventListener('click', async () => {
-      await testInsertion();
     });
   }
   
@@ -165,34 +160,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     } finally {
       elements.toggleBtn.disabled = false;
       updateStatusDisplay();
-    }
-  }
-  
-  async function testInsertion() {
-    try {
-      elements.testBtn.disabled = true;
-      elements.testBtn.textContent = 'Testing...';
-      
-      const response = await chrome.runtime.sendMessage({
-        action: 'forwardToContent',
-        contentMessage: { 
-          action: 'testInsertion',
-          text: '\\alpha'
-        }
-      });
-      
-      if (response.success) {
-        showSuccess('Test insertion successful');
-      } else {
-        showError('Test insertion failed - click on an input field first');
-      }
-      
-    } catch (error) {
-      console.error('Test insertion failed:', error);
-      showError('Test insertion failed');
-    } finally {
-      elements.testBtn.disabled = false;
-      elements.testBtn.textContent = 'Test Insertion';
     }
   }
   

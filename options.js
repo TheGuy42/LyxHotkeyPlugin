@@ -277,10 +277,58 @@ Format 4
         
         updateBindingsDisplay();
         updateConflictsDisplay();
+      } else {
+        // Fallback: check storage directly when content script isn't available
+        await updateBindingsFromStorage();
       }
       
     } catch (error) {
       console.error('Failed to update bindings list:', error);
+      // Fallback: check storage directly when content script communication fails
+      await updateBindingsFromStorage();
+    }
+  }
+
+  async function updateBindingsFromStorage() {
+    try {
+      const settings = await chrome.storage.sync.get(['loadedBindings']);
+      
+      if (settings.loadedBindings) {
+        // Parse bindings to get basic stats
+        const bindingsContent = settings.loadedBindings;
+        const lines = bindingsContent.split('\n');
+        const bindLines = lines.filter(line => line.trim().startsWith('\\bind'));
+        
+        currentBindings = {
+          totalBindings: bindLines.length,
+          multiStepBindings: bindLines.filter(line => {
+            const match = line.match(/\\bind\s+"([^"]+)"/);
+            return match && match[1].trim().split(/\s+/).length > 2; // More than 2 parts indicates multi-step
+          }).length,
+          enabled: true
+        };
+        
+        elements.totalBindings.textContent = currentBindings.totalBindings;
+        elements.multiStepBindings.textContent = currentBindings.multiStepBindings;
+        elements.conflictCount.textContent = 0; // Can't detect conflicts without content script
+        
+        currentConflicts = [];
+        
+        updateBindingsDisplay();
+        updateConflictsDisplay();
+      } else {
+        // No bindings in storage
+        currentBindings = { totalBindings: 0 };
+        currentConflicts = [];
+        elements.totalBindings.textContent = 0;
+        elements.multiStepBindings.textContent = 0;
+        elements.conflictCount.textContent = 0;
+        
+        updateBindingsDisplay();
+        updateConflictsDisplay();
+      }
+    } catch (error) {
+      console.error('Failed to update bindings from storage:', error);
     }
   }
   
@@ -386,12 +434,12 @@ Format 4
         URL.revokeObjectURL(url);
         showMessage('Debug logs exported successfully', 'success');
       } else {
-        showMessage('No logs available to export', 'error');
+        showMessage('No logs available to export or content script not accessible', 'error');
       }
       
     } catch (error) {
       console.error('Failed to export logs:', error);
-      showMessage('Failed to export logs', 'error');
+      showMessage('Failed to export logs - content script may not be available on current page', 'error');
     }
   }
   
