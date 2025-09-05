@@ -33,7 +33,11 @@ class TextInserter {
         }
       }
       
-      this.logger?.warn('Target is not editable', { target: target.tagName });
+      this.logger?.warn('Target is not editable', { 
+        target: target ? target.tagName || 'unknown element' : 'null/undefined',
+        targetType: typeof target,
+        targetConstructor: target?.constructor?.name
+      });
       return false;
     } catch (error) {
       this.logger?.error('Failed to insert text:', error);

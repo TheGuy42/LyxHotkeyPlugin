@@ -23,3 +23,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Test files
+test*.js
+test*.html
